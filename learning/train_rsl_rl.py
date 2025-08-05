@@ -68,6 +68,12 @@ _USE_WANDB = flags.DEFINE_boolean(
     False,
     "Use Weights & Biases for logging (ignored in play-only mode).",
 )
+_WANDB_PROJECT = flags.DEFINE_string(
+    "wandb_project", "mujoco-playground-rl", "Weights & Biases project name"
+)
+_WANDB_ENTITY = flags.DEFINE_string(
+    "wandb_entity", None, "Weights & Biases entity name"
+)
 _SUFFIX = flags.DEFINE_string("suffix", None, "Suffix for the experiment name.")
 _SEED = flags.DEFINE_integer("seed", 1, "Random seed.")
 _NUM_ENVS = flags.DEFINE_integer("num_envs", 4096, "Number of parallel envs.")
@@ -130,8 +136,10 @@ def main(argv):
 
   # Initialize Weights & Biases if required
   if _USE_WANDB.value and not _PLAY_ONLY.value:
-    wandb.tensorboard.patch(root_logdir=logdir)
-    wandb.init(project="mjxrl", entity="dextrm", name=exp_name)
+    wandb_config = {"project": _WANDB_PROJECT.value, "name": exp_name}
+    if _WANDB_ENTITY.value:
+      wandb_config["entity"] = _WANDB_ENTITY.value
+    wandb.init(**wandb_config)
     wandb.config.update(env_cfg.to_dict())
     wandb.config.update({"env_name": _ENV_NAME.value})
 
