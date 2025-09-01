@@ -15,6 +15,7 @@
 """MuJoCo Playground."""
 from mujoco_playground._src import dm_control_suite
 from mujoco_playground._src import locomotion
+from mujoco_playground._src import locomotion_mixed
 from mujoco_playground._src import manipulation
 from mujoco_playground._src import registry
 from mujoco_playground._src import wrapper
@@ -32,6 +33,7 @@ __all__ = [
     "dm_control_suite",
     "init",
     "locomotion",
+    "locomotion_mixed",
     "manipulation",
     "MjxEnv",
     "registry",

@@ -21,6 +21,7 @@ from mujoco import mjx
 
 from mujoco_playground._src import dm_control_suite
 from mujoco_playground._src import locomotion
+from mujoco_playground._src import locomotion_mixed
 from mujoco_playground._src import manipulation
 from mujoco_playground._src import mjx_env
 
@@ -31,7 +32,7 @@ DomainRandomizer = Optional[
 
 # A tuple containing all available environment names across all suites.
 ALL_ENVS = (
-    dm_control_suite.ALL_ENVS + locomotion.ALL_ENVS + manipulation.ALL_ENVS
+    dm_control_suite.ALL_ENVS + locomotion.ALL_ENVS + manipulation.ALL_ENVS + locomotion_mixed.ALL_ENVS
 )
 
 
@@ -40,6 +41,8 @@ def get_default_config(env_name: str):
     return manipulation.get_default_config(env_name)
   elif env_name in locomotion.ALL_ENVS:
     return locomotion.get_default_config(env_name)
+  elif env_name in locomotion_mixed.ALL_ENVS:
+    return locomotion_mixed.get_default_config(env_name)
   elif env_name in dm_control_suite.ALL_ENVS:
     return dm_control_suite.get_default_config(env_name)
 
@@ -55,6 +58,8 @@ def load(
     return manipulation.load(env_name, config, config_overrides)
   elif env_name in locomotion.ALL_ENVS:
     return locomotion.load(env_name, config, config_overrides)
+  elif env_name in locomotion_mixed.ALL_ENVS:
+    return locomotion_mixed.load(env_name, config, config_overrides)
   elif env_name in dm_control_suite.ALL_ENVS:
     return dm_control_suite.load(env_name, config, config_overrides)
 
@@ -67,5 +72,7 @@ def get_domain_randomizer(env_name: str) -> Optional[DomainRandomizer]:
 
   if env_name in locomotion.ALL_ENVS:
     return locomotion.get_domain_randomizer(env_name)
+  elif env_name in locomotion_mixed.ALL_ENVS:
+    return locomotion_mixed.get_domain_randomizer(env_name)
 
   return None

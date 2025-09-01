@@ -19,6 +19,7 @@ from ml_collections import config_dict
 
 from mujoco_playground._src import dm_control_suite
 from mujoco_playground._src import locomotion
+from mujoco_playground._src import locomotion_mixed
 from mujoco_playground._src import manipulation
 from mujoco_playground._src import registry
 
@@ -57,6 +58,7 @@ class RegistryTest(absltest.TestCase):
   def test_constants(self) -> None:
     self.assertNotEmpty(dm_control_suite.ALL_ENVS)
     self.assertNotEmpty(locomotion.ALL_ENVS)
+    self.assertNotEmpty(locomotion_mixed.ALL_ENVS)
     self.assertNotEmpty(manipulation.ALL_ENVS)
     self.assertNotEmpty(registry.ALL_ENVS)
     self.assertEqual(
@@ -64,6 +66,7 @@ class RegistryTest(absltest.TestCase):
         sorted(
             dm_control_suite.ALL_ENVS
             + locomotion.ALL_ENVS
+            + locomotion_mixed.ALL_ENVS
             + manipulation.ALL_ENVS
         ),
     )
