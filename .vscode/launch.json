@@ -1,0 +1,43 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug CheetahRunV2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/learning/train_jax_ppo.py",
+            "args": [
+                "--env_name",
+                "CheetahRunV2",
+                "--num_timesteps",
+                "100000",
+                "--use_wandb",
+                "True",
+                "--num_envs",
+                "1",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Debug Kawaru",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/learning/tmp.py",
+            "args": [
+                "--env_name",
+                "KawaruJoystickMixed",
+                // "--num_timesteps",
+                // "1_000",
+                // "--use_wandb",
+                // "True",
+                // "--num_envs",
+                // "2",
+                // "--rscope_envs",
+                // "10",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
