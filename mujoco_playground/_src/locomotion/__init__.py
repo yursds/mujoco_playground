@@ -45,58 +45,32 @@ from mujoco_playground._src.locomotion.t1 import randomize as t1_randomize
 mjx_env.ensure_menagerie_exists()  # Ensure menagerie exists when module is imported.
 
 _envs = {
-    "ApolloJoystickFlatTerrain": functools.partial(
-        apollo_joystick.Joystick, task="flat_terrain"
-    ),
+    "ApolloJoystickFlatTerrain": functools.partial(apollo_joystick.Joystick, task="flat_terrain"),
     "BarkourJoystick": barkour_joystick.Joystick,
-    "BerkeleyHumanoidJoystickFlatTerrain": functools.partial(
-        berkeley_humanoid_joystick.Joystick, task="flat_terrain"
-    ),
-    "BerkeleyHumanoidJoystickRoughTerrain": functools.partial(
-        berkeley_humanoid_joystick.Joystick, task="rough_terrain"
-    ),
-    "G1JoystickFlatTerrain": functools.partial(
-        g1_joystick.Joystick, task="flat_terrain"
-    ),
-    "G1JoystickRoughTerrain": functools.partial(
-        g1_joystick.Joystick, task="rough_terrain"
-    ),
-    "Go1JoystickFlatTerrain": functools.partial(
-        go1_joystick.Joystick, task="flat_terrain"
-    ),
-    "Go1JoystickRoughTerrain": functools.partial(
-        go1_joystick.Joystick, task="rough_terrain"
-    ),
+    "BerkeleyHumanoidJoystickFlatTerrain": functools.partial(berkeley_humanoid_joystick.Joystick, task="flat_terrain"),
+    "BerkeleyHumanoidJoystickRoughTerrain": functools.partial(berkeley_humanoid_joystick.Joystick, task="rough_terrain"),
+    "G1JoystickFlatTerrain": functools.partial(g1_joystick.Joystick, task="flat_terrain"),
+    "G1JoystickRoughTerrain": functools.partial(g1_joystick.Joystick, task="rough_terrain"),
+    "Go1JoystickFlatTerrain": functools.partial(go1_joystick.Joystick, task="flat_terrain"),
+    "Go1JoystickRoughTerrain": functools.partial(go1_joystick.Joystick, task="rough_terrain"),
     "Go1Getup": go1_getup.Getup,
     "Go1Handstand": go1_handstand.Handstand,
     "Go1Footstand": go1_handstand.Footstand,
     "H1InplaceGaitTracking": h1_inplace_gait_tracking.InplaceGaitTracking,
     "H1JoystickGaitTracking": h1_joystick_gait_tracking.JoystickGaitTracking,
     "Op3Joystick": op3_joystick.Joystick,
-    "SpotFlatTerrainJoystick": functools.partial(
-        spot_joystick.Joystick, task="flat_terrain"
-    ),
+    "SpotFlatTerrainJoystick": functools.partial(spot_joystick.Joystick, task="flat_terrain"),
     "SpotGetup": spot_getup.Getup,
-    "SpotJoystickGaitTracking": (
-        spot_joystick_gait_tracking.JoystickGaitTracking
-    ),
-    "T1JoystickFlatTerrain": functools.partial(
-        t1_joystick.Joystick, task="flat_terrain"
-    ),
-    "T1JoystickRoughTerrain": functools.partial(
-        t1_joystick.Joystick, task="rough_terrain"
-    ),
+    "SpotJoystickGaitTracking": spot_joystick_gait_tracking.JoystickGaitTracking,
+    "T1JoystickFlatTerrain": functools.partial(t1_joystick.Joystick, task="flat_terrain"),
+    "T1JoystickRoughTerrain": functools.partial(t1_joystick.Joystick, task="rough_terrain"),
 }
 
 _cfgs = {
     "ApolloJoystickFlatTerrain": apollo_joystick.default_config,
     "BarkourJoystick": barkour_joystick.default_config,
-    "BerkeleyHumanoidJoystickFlatTerrain": (
-        berkeley_humanoid_joystick.default_config
-    ),
-    "BerkeleyHumanoidJoystickRoughTerrain": (
-        berkeley_humanoid_joystick.default_config
-    ),
+    "BerkeleyHumanoidJoystickFlatTerrain": (berkeley_humanoid_joystick.default_config),
+    "BerkeleyHumanoidJoystickRoughTerrain": (berkeley_humanoid_joystick.default_config),
     "G1JoystickFlatTerrain": g1_joystick.default_config,
     "G1JoystickRoughTerrain": g1_joystick.default_config,
     "Go1JoystickFlatTerrain": go1_joystick.default_config,
@@ -115,12 +89,8 @@ _cfgs = {
 }
 
 _randomizer = {
-    "BerkeleyHumanoidJoystickFlatTerrain": (
-        berkeley_humanoid_randomize.domain_randomize
-    ),
-    "BerkeleyHumanoidJoystickRoughTerrain": (
-        berkeley_humanoid_randomize.domain_randomize
-    ),
+    "BerkeleyHumanoidJoystickFlatTerrain": (berkeley_humanoid_randomize.domain_randomize),
+    "BerkeleyHumanoidJoystickRoughTerrain": (berkeley_humanoid_randomize.domain_randomize),
     "G1JoystickFlatTerrain": g1_randomize.domain_randomize,
     "G1JoystickRoughTerrain": g1_randomize.domain_randomize,
     "Go1JoystickFlatTerrain": go1_randomize.domain_randomize,
