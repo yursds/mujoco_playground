@@ -22,6 +22,14 @@
   <worldbody>
     <geom name="floor" size="0 0 0.01" type="plane" material="groundplane" priority="1" friction="0.6" condim="3" contype="1" conaffinity="0"/>
   </worldbody>
+  
+  <sensor>
+    <contact name="FR_floor_found" geom1="FR" geom2="floor" reduce="mindist" num="1" data="found"/>
+    <contact name="FL_floor_found" geom1="FL" geom2="floor" reduce="mindist" num="1" data="found"/>
+    <contact name="RL_floor_found" geom1="RL" geom2="floor" reduce="mindist" num="1" data="found"/>
+    <contact name="RR_floor_found" geom1="RR" geom2="floor" reduce="mindist" num="1" data="found"/>
+  </sensor>
+
 
   <keyframe>
     <key name="home" qpos="

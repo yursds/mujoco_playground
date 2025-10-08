@@ -1,4 +1,4 @@
-<!-- add arm body -->
+<!-- add arm body and new collision -->
 
 <mujoco model="go1 feet only">
   <compiler angle="radian" autolimits="true"/>
@@ -200,7 +200,7 @@
           diaginertia="0.000734064 0.000468438 0.000398719"/>
         <joint class="abduction" name="fake_hip_joint"/>
           <geom class="arm1"/>
-          <geom class="arm2"/>
+          <geom class="arm2" solimp="0.9 .95 0.023" contype="0" conaffinity="1"/>
       </body>
     </body>
   </worldbody>

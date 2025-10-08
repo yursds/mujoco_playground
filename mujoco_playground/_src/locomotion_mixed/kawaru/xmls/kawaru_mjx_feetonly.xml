@@ -22,7 +22,7 @@
         <position forcerange="-35.55 35.55"/>
       </default>
       <default class="collision">
-        <geom group="1" type="capsule" rgba="0.5 0.2 0.2 1"/>
+        <geom group="1" type="capsule" rgba="0.5 0.2 0.2 0.2"/>
         <default class="hip_left1">
           <geom size="0.046 0.02" pos="0 0.045 0" quat="1 1 0 0" type="cylinder"/>
         </default>
@@ -63,6 +63,12 @@
           collide with each other, but they can collide with the floor.
           -->
           <geom type="sphere" size="0.023" pos="0 0 -0.213" solimp="0.9 .95 0.023" contype="0" conaffinity="1"/>
+        </default>
+        <default class="fake">
+          <geom type="sphere" size="0.01" pos="0 0 0" rgba="0.5 0.8 0.8 1"/>
+        </default>
+        <default class="fake_cap">
+          <geom type="capsule" size="0.01 0.01" pos="0 0 0" rgba="0.5 0.8 0.8 1"/>
         </default>
       </default>
     </default>
@@ -184,6 +190,14 @@
             <site name="RL" pos="0 0 -0.213" type="sphere" size="0.023" group="5"/>
           </body>
         </body>
+      </body>
+      <body name="fake" pos="0.0 0.0 0">
+        <inertial pos="0 0 0" mass="1e-14" diaginertia="1e-14 1e-14 1e-14"/>
+        <!-- <inertial pos="-0.0049166 -0.00762615 -8.865e-05" quat="0.482891 0.495027 0.514169 0.507341" mass="0.68"
+          diaginertia="0.000734064 0.000468438 0.000398719"/> -->
+        <joint class="abduction" name="fake_hip_joint"/>
+          <geom class="fake"/>
+          <geom class="fake_cap" solimp="0.9 .95 0.023" contype="0" conaffinity="1"/>
       </body>
     </body>
   </worldbody>

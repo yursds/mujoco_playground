@@ -1,5 +1,3 @@
-<!-- add arm body -->
-
 <mujoco model="go1 feet only">
   <compiler angle="radian" autolimits="true"/>
 
@@ -24,7 +22,7 @@
         <position forcerange="-35.55 35.55"/>
       </default>
       <default class="collision">
-        <geom group="1" type="capsule" rgba="0.2 0.2 0.5 1"/>
+        <geom group="1" type="capsule" rgba="0.5 0.2 0.2 0.2"/>
         <default class="hip_left1">
           <geom size="0.046 0.02" pos="0 0.045 0" quat="1 1 0 0" type="cylinder"/>
         </default>
@@ -57,14 +55,6 @@
         </default>
         <default class="calf2">
           <geom size="0.01" fromto="0.02 0 -0.13 0 0 -0.2"/>
-        </default>
-        <!-- new arm1 geom -->
-        <default class="arm1">
-          <geom size="0.015" fromto="0.0 0 0 0.02 0 0.16"/>
-        </default>
-        <!-- new arm2 geom with collision -->
-        <default class="arm2">
-          <geom size="0.015" fromto="0.02 0 0.16 0.02 0.18 0.16"/>
         </default>
         <default class="foot">
           <!--
@@ -195,13 +185,6 @@
           </body>
         </body>
       </body>
-      <body name="fake" pos="0.0 0.0 0">
-        <inertial pos="0.02 0.18 0.16" quat="0.482891 0.495027 0.514169 0.507341" mass="0.68"
-          diaginertia="0.000734064 0.000468438 0.000398719"/>
-        <joint class="abduction" name="fake_hip_joint"/>
-          <geom class="arm1"/>
-          <geom class="arm2"/>
-      </body>
     </body>
   </worldbody>
 
@@ -218,7 +201,6 @@
     <position class="abduction" name="RL_hip" joint="RL_hip_joint"/>
     <position class="hip" name="RL_thigh" joint="RL_thigh_joint"/>
     <position class="knee" name="RL_calf" joint="RL_calf_joint"/>
-    <!-- <position class="abduction" name="RL_hip_fake" joint="fake_hip_joint"/> -->
   </actuator>
 
   <sensor>
