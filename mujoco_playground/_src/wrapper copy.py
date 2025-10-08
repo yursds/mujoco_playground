@@ -391,6 +391,14 @@ class MixedEnvWrapper(Wrapper):
         1: 12  # Se model_idx == 1, maschera l'attuatore 12
     }
 
+  @property
+  def action_size(self) -> int:
+    """Return total action size: base actuators + num_models logits for selection."""
+    if not self.environments:
+      return 0
+    base = self.environments[0].action_size
+    return int(base + self.num_models)
+
   @functools.partial(jax.jit, static_argnums=(0,))
   def reset(self, rng_key: jax.Array) -> mjx_env.State:
     '''
@@ -427,11 +435,13 @@ class MixedEnvWrapper(Wrapper):
             jp.array(actuator_idx, dtype=jp.int32), # Converti l'indice int in un array JAX
             mask_actuator_index                      # Altrimenti, mantieni il valore corrente (o -1)
         )
-        
+    
     # 3. Salva le informazioni nel dizionario info dello stato
     initial_states.info['model_index'] = replicated_indices
     initial_states.info['mask_actuator_index'] = mask_actuator_index
-    
+    # inizializza chosen_model (la policy può sovrascriverla tramite l'azione)
+    initial_states.info['chosen_model'] = replicated_indices
+
     return initial_states
   
   @functools.partial(jax.jit, static_argnums=(0,))
@@ -446,14 +456,33 @@ class MixedEnvWrapper(Wrapper):
       # Il 'state' passato qui contiene 'mask_actuator_index' in state.info
       return jax.lax.switch(model_idx, self.step_fns, state, action)
     
-    # Vmap (parallelizza) l'operazione di step su tutti gli ambienti nel batch
-    new_state = jax.vmap(_step_single)(state, action, state.info['model_index'])
-    
-    # Manteniamo le informazioni ausiliarie nel nuovo stato
-    new_state.info['model_index'] = state.info['model_index']
-    new_state.info['mask_actuator_index'] = state.info['mask_actuator_index']
-    
-    return new_state
+    # Supporto per azione estesa: [controls..., model_logits_0..model_logits_{M-1}]
+    # Se l'azione ha dimensione maggiore di quella degli attuatori, assumiamo
+    # che gli ultimi `self.num_models` elementi siano i logits per la scelta del modello.
+    total_dim = action.shape[-1]
+    num_models = int(self.num_models)
+
+    if total_dim >= num_models + 1:
+      control_dim = total_dim - num_models
+      action_controls = action[..., :control_dim]
+      model_logits = action[..., control_dim:]
+      # Scegli il modello tramite argmax sui logits (non-differenziabile).
+      # Se vuoi gradiente attraverso la scelta, considera Gumbel-Softmax.
+      chosen_model = jp.argmax(model_logits, axis=-1).astype(jp.int32)
+      new_state = jax.vmap(_step_single)(state, action_controls, chosen_model)
+      # Aggiorna info
+      new_state.info['model_index'] = chosen_model
+      new_state.info['mask_actuator_index'] = state.info['mask_actuator_index']
+      new_state.info['chosen_model'] = chosen_model
+      return new_state
+    else:
+      # Azione normale: nessuna selezione modello da parte della policy
+      new_state = jax.vmap(_step_single)(state, action, state.info['model_index'])
+      # Manteniamo le informazioni ausiliarie nel nuovo stato
+      new_state.info['model_index'] = state.info['model_index']
+      new_state.info['mask_actuator_index'] = state.info['mask_actuator_index']
+      new_state.info['chosen_model'] = state.info.get('chosen_model', state.info['model_index'])
+      return new_state
   
 class MixedEnvWrapperhgf(Wrapper):
   """Brax wrapper for multiple Mujoco models using JAX's vmap."""
