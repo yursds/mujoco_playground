@@ -96,21 +96,9 @@ def default_config() -> config_dict.ConfigDict:
         xml_paths=consts.XML_PATHS,
       ),
       impl="jax",
-      nconmax=5 * 8192,
+      nconmax=4 * 8192,
       njmax=40,
   )
-
-
-# def load_max_shapes(filepath):
-#     """
-#     Loads a dictionary of max shapes from a Python file.
-#     """
-#     namespace = {}
-#     with open(filepath, "r") as f:
-#         file_content = f.read()
-#         exec(file_content, namespace)
-    
-#     return namespace['max_shapes']
 
 
 class Joystick(kawaru_base.KawaruEnv):
@@ -129,7 +117,6 @@ class Joystick(kawaru_base.KawaruEnv):
         config_overrides=config_overrides,
     )
     
-    # self.max_shapes = load_max_shapes(consts.ROOT_PATH / "max_shapes.py")
     self._post_init()
 
   def _post_init(self) -> None:
@@ -137,7 +124,7 @@ class Joystick(kawaru_base.KawaruEnv):
     self._default_pose = jp.array(self._mj_model.keyframe("home").qpos[7:])
 
     # Note: First joint is freejoint.
-    self._lowers, self._uppers = self.mj_model.jnt_range[1:13].T
+    self._lowers, self._uppers = self.mj_model.jnt_range[1:].T
     self._soft_lowers = self._lowers * self._config.soft_joint_pos_limit_factor
     self._soft_uppers = self._uppers * self._config.soft_joint_pos_limit_factor
 
@@ -166,36 +153,36 @@ class Joystick(kawaru_base.KawaruEnv):
     self._cmd_b = jp.array(self._config.command_config.b)
 
 
-  # def pad_data(self, obj_to_pad: dataclasses, target_shapes: dict):
-  #   """
-  #   Recursively pads arrays in a dataclass based on a dictionary of target shapes.
-  #   """
-  #   updates = {}
-  #   for field in dataclasses.fields(obj_to_pad):
-  #     attr_name = field.name
-  #     current_val = getattr(obj_to_pad, attr_name)
+  def pad_data(self, obj_to_pad: dataclasses, target_shapes: dict):
+    """
+    Recursively pads arrays in a dataclass based on a dictionary of target shapes.
+    """
+    updates = {}
+    for field in dataclasses.fields(obj_to_pad):
+      attr_name = field.name
+      current_val = getattr(obj_to_pad, attr_name)
       
-  #     # Check if the attribute name exists in the target shapes dictionary
-  #     if attr_name in target_shapes:
-  #       target_val = target_shapes[attr_name]
+      # Check if the attribute name exists in the target shapes dictionary
+      if attr_name in target_shapes:
+        target_val = target_shapes[attr_name]
         
-  #       if dataclasses.is_dataclass(current_val) and isinstance(target_val, dict):
-  #         # If it's a nested dataclass, recursively call pad_data
-  #         updates[attr_name] = self.pad_data(current_val, target_val)
-  #       elif isinstance(current_val, (jp.ndarray, np.ndarray)) and isinstance(target_val, (tuple, list)):
-  #         current_shape = current_val.shape
-  #         if current_shape != target_val:
-  #             padding_needed = [(0, t - s) for s, t in zip(current_shape, target_val)]
-  #             padded_val = jp.pad(current_val, padding_needed, mode='constant', constant_values=0)
-  #             updates[attr_name] = padded_val
-  #         else:
-  #           updates[attr_name] = current_val
-  #       else:
-  #         updates[attr_name] = target_val
-  #     # else:
-  #     #   updates[attr_name] = current_val
+        if dataclasses.is_dataclass(current_val) and isinstance(target_val, dict):
+          # If it's a nested dataclass, recursively call pad_data
+          updates[attr_name] = self.pad_data(current_val, target_val)
+        elif isinstance(current_val, (jp.ndarray, np.ndarray)) and isinstance(target_val, (tuple, list)):
+          current_shape = current_val.shape
+          if current_shape != target_val:
+              padding_needed = [(0, t - s) for s, t in zip(current_shape, target_val)]
+              padded_val = jp.pad(current_val, padding_needed, mode='constant', constant_values=0)
+              updates[attr_name] = padded_val
+          else:
+            updates[attr_name] = current_val
+        else:
+          updates[attr_name] = target_val
+      # else:
+      #   updates[attr_name] = current_val
     
-  #   return obj_to_pad.replace(**updates)
+    return obj_to_pad.replace(**updates)
 
   def reset(self, rng: jax.Array) -> mjx_env.State:
     
@@ -222,14 +209,12 @@ class Joystick(kawaru_base.KawaruEnv):
         self.mj_model,
         qpos=qpos,
         qvel=qvel,
-        ctrl=qpos[7:],
+        ctrl=qpos[7:19],
         impl=self.mjx_model.impl.value,
         nconmax=self._config.nconmax,
         njmax=self._config.njmax,
     )
     data = mjx.forward(self.mjx_model, data)
-
-    # data = mjx_env.init(self.mjx_model, qpos=qpos, qvel=qvel, ctrl=qpos[7:19])
 
     rng, key1, key2, key3 = jax.random.split(rng, 4)
     time_until_next_pert = jax.random.uniform(
@@ -289,7 +274,7 @@ class Joystick(kawaru_base.KawaruEnv):
     obs = self._get_obs(data, info)
     reward, done = jp.zeros(2)
     
-    # data = self.pad_data(data, self.max_shapes )
+    # data = self.pad_data(data, consts.MJX_DATA_MAX_SHAPES)
     
     return mjx_env.State(data, obs, reward, done, metrics, info)
 
@@ -306,20 +291,7 @@ class Joystick(kawaru_base.KawaruEnv):
     if self._config.pert_config.enable:
       state = self._maybe_apply_perturbation(state)
     # state = self._reset_if_outside_bounds(state)
-    
-    # Retrieve the index to mask from the state info (injected by the wrapper)
-    mask_idx = state.info.get('mask_actuator_index', jp.array(-1, dtype=jp.int32))
-    
-    # Check if masking is needed (i.e., mask_idx is not the dummy value -1)
-    masking_needed = mask_idx >= 0
-    
-    action_with_mask = action.at[mask_idx].set(0.0)
-    action = jp.where(
-      masking_needed,     # Condition: If masking is needed (mask_idx >= 0)
-      action_with_mask,   # Result TRUE: Use the targets where the masked actuator is set to 0.0 action
-      action              # Result FALSE: Use the original targets
-    )
-    
+
     motor_targets = self._default_pose + action * self._config.action_scale
     data = mjx_env.step(
         self.mjx_model, state.data, motor_targets, self.n_substeps
@@ -432,8 +404,8 @@ class Joystick(kawaru_base.KawaruEnv):
         noisy_linvel,  # 3
         noisy_gyro,  # 3
         noisy_gravity,  # 3
-        noisy_joint_angles[:12] - self._default_pose[:12],  # 12 # !
-        noisy_joint_vel[:12],  # 12 # !
+        noisy_joint_angles[:-1] - self._default_pose[:-1],  # 12 # !
+        noisy_joint_vel[:-1],  # 12 # !
         info["last_act"],  # 12
         info["command"],  # 3
     ])
@@ -449,8 +421,8 @@ class Joystick(kawaru_base.KawaruEnv):
         gravity,  # 3
         linvel,  # 3
         angvel,  # 3
-        joint_angles[:12] - self._default_pose[:12],  # 12 # !
-        joint_vel[:12],  # 12 # !
+        joint_angles[:-1] - self._default_pose[:-1],  # 12 # !
+        joint_vel[:-1],  # 12 # !
         data.actuator_force,  # 12
         info["last_contact"],  # 4
         feet_vel,  # 4*3
@@ -485,14 +457,14 @@ class Joystick(kawaru_base.KawaruEnv):
         "lin_vel_z": self._cost_lin_vel_z(self.get_global_linvel(data)),
         "ang_vel_xy": self._cost_ang_vel_xy(self.get_global_angvel(data)),
         "orientation": self._cost_orientation(self.get_upvector(data)),
-        "stand_still": self._cost_stand_still(info["command"][:12], data.qpos[7:19]),
+        "stand_still": self._cost_stand_still(info["command"], data.qpos[7:]),
         "termination": self._cost_termination(done),
-        "pose": self._reward_pose(data.qpos[7:19]),
+        "pose": self._reward_pose(data.qpos[7:]),
         "torques": self._cost_torques(data.actuator_force),
         "action_rate": self._cost_action_rate(
             action, info["last_act"], info["last_last_act"]
         ),
-        "energy": self._cost_energy(data.qvel[6:18], data.actuator_force[:12]),
+        "energy": self._cost_energy(data.qvel[6:18], data.actuator_force),
         "feet_slip": self._cost_feet_slip(data, contact, info),
         "feet_clearance": self._cost_feet_clearance(data),
         "feet_height": self._cost_feet_height(
@@ -501,7 +473,7 @@ class Joystick(kawaru_base.KawaruEnv):
         "feet_air_time": self._reward_feet_air_time(
             info["feet_air_time"], first_contact, info["command"]
         ),
-        "dof_pos_limits": self._cost_joint_pos_limits(data.qpos[7:19]),
+        "dof_pos_limits": self._cost_joint_pos_limits(data.qpos[7:]),
     }
 
   # Tracking rewards.
@@ -561,7 +533,7 @@ class Joystick(kawaru_base.KawaruEnv):
   def _reward_pose(self, qpos: jax.Array) -> jax.Array:
     # Stay close to the default pose.
     weight = jp.array([1.0, 1.0, 0.1] * 4)
-    return jp.exp(-jp.sum(jp.square(qpos[:12] - self._default_pose[:12]) * weight))
+    return jp.exp(-jp.sum(jp.square(qpos[:-1] - self._default_pose[:-1]) * weight))
 
   def _cost_stand_still(
       self,
@@ -569,7 +541,7 @@ class Joystick(kawaru_base.KawaruEnv):
       qpos: jax.Array,
   ) -> jax.Array:
     cmd_norm = jp.linalg.norm(commands)
-    return jp.sum(jp.abs(qpos - self._default_pose[:12])) * (cmd_norm < 0.01)
+    return jp.sum(jp.abs(qpos - self._default_pose)) * (cmd_norm < 0.01)
 
   def _cost_termination(self, done: jax.Array) -> jax.Array:
     # Penalize early termination.

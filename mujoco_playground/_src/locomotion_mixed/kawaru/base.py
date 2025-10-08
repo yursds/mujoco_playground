@@ -24,7 +24,7 @@ import mujoco
 from mujoco import mjx
 
 from mujoco_playground._src import mjx_env
-from mujoco_playground._src.locomotion_mixed.kawaru import old_kawaru_constants as consts
+from mujoco_playground._src.locomotion_mixed.kawaru import kawaru_constants as consts
 
 
 def get_assets() -> Dict[str, bytes]:
@@ -61,9 +61,14 @@ class KawaruEnv(mjx_env.MjxEnv):
     self._mj_model.vis.global_.offwidth = 3840
     self._mj_model.vis.global_.offheight = 2160
 
-    self._mjx_model =  mjx.put_model(self._mj_model)
+    self._mjx_model =  mjx.put_model(self._mj_model, impl=self._config.impl)
     self._imu_site_id = self._mj_model.site("imu").id
 
+    # Contact sensor ids.
+    self._feet_floor_found_sensor = [
+        self._mj_model.sensor(f"{geom}_floor_found").id
+        for geom in consts.FEET_GEOMS
+    ]
   # Sensor readings.
 
   def get_upvector(self, data: mjx.Data) -> jax.Array:
