@@ -22,24 +22,20 @@ from ml_collections import config_dict
 from mujoco import mjx, MjModel
 
 from mujoco_playground._src import mjx_env
-from mujoco_playground._src.locomotion_mixed.kawaru import old_joystick as old_kawaru_joystick
 from mujoco_playground._src.locomotion_mixed.kawaru import randomize as kawaru_randomize
 from mujoco_playground._src.locomotion_mixed.kawaru import joystick as kawaru_joystick
 
 mjx_env.ensure_menagerie_exists()  # Ensure menagerie exists when module is imported.
 
 _envs = {
-    "OldKawaruJoystick": functools.partial(old_kawaru_joystick.Joystick, task="flat_terrain"),
     "KawaruJoystickMixed": kawaru_joystick.Joystick,
 }
 
 _cfgs = {
-    "OldKawaruJoystick": old_kawaru_joystick.default_config,
     "KawaruJoystickMixed": kawaru_joystick.default_config,
 }
 
 _randomizer = {
-    "OldKawaruJoystick": kawaru_randomize.domain_randomize,
     "KawaruJoystickMixed": kawaru_randomize.domain_randomize,
 }
 
