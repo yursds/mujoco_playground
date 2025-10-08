@@ -43,7 +43,6 @@ from mujoco_playground import wrapper
 from mujoco_playground.config import locomotion_mixed_params
 
 from learning import mixed_train_2 as ppo
-from rscope import brax as rscope_utils
 
 # Set up environment variables for JAX and rendering
 xla_flags = os.environ.get("XLA_FLAGS", "")
@@ -69,6 +68,7 @@ _DOMAIN_RANDOMIZATION      = flags.DEFINE_boolean("domain_randomization", False,
 _ENV_NAME                  = flags.DEFINE_string("env_name", "LeapCubeReorient", f"Name of the environment. One of {', '.join(registry.ALL_ENVS)}")
 _ENTROPY_COST              = flags.DEFINE_float("entropy_cost", 5e-3, "Entropy cost")
 _EPISODE_LENGTH            = flags.DEFINE_integer("episode_length", 1000, "Episode length")
+_IMPL                      = flags.DEFINE_enum("impl", "jax", ["jax", "warp"], "MJX implementation")
 _LEARNING_RATE             = flags.DEFINE_float("learning_rate", 5e-4, "Learning rate")
 _LOAD_CHECKPOINT_PATH      = flags.DEFINE_string("load_checkpoint_path", None, "Path to load a checkpoint from")
 _LOG_TRAINING_METRICS      = flags.DEFINE_boolean("log_training_metrics", False, "Log training metrics")
@@ -79,6 +79,7 @@ _NUM_EVAL_ENVS             = flags.DEFINE_integer("num_eval_envs", 128, "Number 
 _NUM_ENVS                  = flags.DEFINE_integer("num_envs", 1024, "Number of environments")
 _NUM_MINIBATCHES           = flags.DEFINE_integer("num_minibatches", 8, "Number of minibatches")
 _NUM_UPDATES_PER_BATCH     = flags.DEFINE_integer("num_updates_per_batch", 8, "Number of updates per batch")
+_NUM_VIDEOS                = flags.DEFINE_integer("num_videos", 1, "Number of videos to record after training.")
 _MAX_GRAD_NORM             = flags.DEFINE_float("max_grad_norm", 1.0, "Max gradient norm")
 _PLAY_ONLY                 = flags.DEFINE_boolean("play_only", False, "If true, only play with the model and do not train")
 _POLICY_HIDDEN_LAYER_SIZES = flags.DEFINE_list("policy_hidden_layer_sizes", [64, 64, 64], "Policy network hidden layer sizes")
@@ -104,6 +105,7 @@ def get_rl_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in mujoco_playground.locomotion_mixed._envs:
     if _VISION.value: return locomotion_mixed_params.brax_vision_ppo_config(env_name)
     return locomotion_mixed_params.brax_ppo_config(env_name)
+  raise ValueError(f"Env {env_name} not found in {registry.ALL_ENVS}.")
 
 def setup_experiment_logging(
   exp_name: str, 
@@ -388,8 +390,10 @@ def main(argv):
 
   # ! Load initial environment
   env = registry.load(_ENV_NAME.value, config=env_cfg)
-  eval_env = None if _VISION.value else registry.load(_ENV_NAME.value, config=env_cfg)
-  
+  config_overrides = {"impl": _IMPL.value}
+  eval_env = (
+      None if _VISION.value else registry.load(_ENV_NAME.value, config=env_cfg, config_overrides=config_overrides)
+  )
   # Configure and run training
   train_fn, training_params = configure_mixed_training(ppo_params, env_cfg, exp_name, logdir)
 
@@ -411,8 +415,10 @@ def main(argv):
 
   policy_params_fn = lambda *args: None
   if _RSCOPE_ENVS.value:
+    from rscope import brax as rscope_utils
+
     # !!! registry.load is used to load the environment, which is expected to be a MixedModelEnv
-    rscope_env = env if _VISION.value else registry.load(_ENV_NAME.value, config=env_cfg)
+    rscope_env =  env if _VISION.value else registry.load(_ENV_NAME.value, config=env_cfg, config_overrides=config_overrides)
     if not _VISION.value:
       rscope_env = wrapper.wrap_for_mixed_brax_training(
           rscope_env,

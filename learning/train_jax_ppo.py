@@ -78,7 +78,7 @@ _PLAY_ONLY = flags.DEFINE_boolean(
 )
 _USE_WANDB = flags.DEFINE_boolean(
     "use_wandb",
-    False,
+    True,
     "Use Weights & Biases for logging (ignored in play-only mode)",
 )
 _WANDB_PROJECT = flags.DEFINE_string(
@@ -525,7 +525,7 @@ def main(argv):
   for i, rollout in enumerate(trajectories):
     traj = rollout[::render_every]
     frames = eval_env.render(
-        traj, height=480, width=640, scene_option=scene_option
+        traj, height=480, width=640, scene_option=scene_option, camera="track",
     )
     media.write_video(f"rollout{i}.mp4", frames, fps=fps)
     print(f"Rollout video saved as 'rollout{i}.mp4'.")
