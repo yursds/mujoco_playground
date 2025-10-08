@@ -7,4 +7,7 @@ mujoco_menagerie
 checkpoints/
 
 *.mp4
+video
 wandb
+
+.vscode
