@@ -20,6 +20,8 @@ from mujoco_playground._src import manipulation
 from mujoco_playground._src import registry
 from mujoco_playground._src import wrapper
 from mujoco_playground._src import wrapper_torch
+#!!
+from mujoco_playground._src import wrapper_mixed
 # pylint: disable=g-importing-member
 from mujoco_playground._src.mjx_env import MjxEnv
 from mujoco_playground._src.mjx_env import render_array
@@ -40,4 +42,5 @@ __all__ = [
     "step",
     "wrapper",
     "wrapper_torch",
+    "wrapper_mixed",
 ]

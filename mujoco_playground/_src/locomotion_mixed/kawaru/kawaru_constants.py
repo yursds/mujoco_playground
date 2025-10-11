@@ -34,12 +34,12 @@ FULL_COLLISIONS_FLAT_TERRAIN_XML = (ROOT_PATH / "xmls" / "scene_mjx_fullcollisio
 
 XML_PATHS = [
     # FEET_ONLY_FLAT_TERRAIN_ACT_FAKE_XML.as_posix(),
-    FEET_ONLY_FLAT_TERRAIN_MIN_XML.as_posix(),
-    # FEET_ONLY_FLAT_TERRAIN_XML.as_posix(),
+    # FEET_ONLY_FLAT_TERRAIN_MIN_XML.as_posix(),
+    FEET_ONLY_FLAT_TERRAIN_XML.as_posix(),
     # FEET_ONLY_FLAT_TERRAIN_XML.as_posix(),
     # FEET_ONLY_FLAT_TERRAIN_XML_2.as_posix(),
     # FEET_ONLY_FLAT_TERRAIN_XML_3.as_posix(),
-    # FEET_ONLY_FLAT_TERRAIN_XML_4.as_posix(),
+    FEET_ONLY_FLAT_TERRAIN_XML_4.as_posix(),
     # FEET_ONLY_FLAT_TERRAIN_XML_5.as_posix(),
 ]
 

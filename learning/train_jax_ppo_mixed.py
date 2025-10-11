@@ -37,16 +37,13 @@ import wandb
 
 from brax.training.agents.ppo import networks as ppo_networks
 from brax.training.agents.ppo import networks_vision as ppo_networks_vision
+# !!
+from learning import train_mixed as ppo
+
 import mujoco_playground
 from mujoco_playground import registry
-from mujoco_playground import wrapper
-# from mujoco_playground.config import dm_control_suite_params
-# from mujoco_playground.config import locomotion_params
-# from mujoco_playground.config import manipulation_params
-
-# NEW
+from mujoco_playground import wrapper_mixed as wrapper
 from mujoco_playground.config import locomotion_mixed_params
-from learning import mixed_train_2 as ppo
 
 # Set up environment variables for JAX and rendering
 xla_flags = os.environ.get("XLA_FLAGS", "")
@@ -101,6 +98,7 @@ _VALUE_OBS_KEY             = flags.DEFINE_string("value_obs_key", "state", "Obse
 _VISION                    = flags.DEFINE_boolean("vision", False, "Use vision input")
 _WANDB_PROJECT             = flags.DEFINE_string("wandb_project", "mujoco-playground-rl", "Weights & Biases project name")
 _WANDB_ENTITY              = flags.DEFINE_string("wandb_entity", None, "Weights & Biases entity name")
+_EVAL_ALL_MODELS           = flags.DEFINE_boolean("eval_all_models", False, "Whether to evaluate on all models during training (slower) or just the first model")
 
 
 def get_rl_config(env_name: str) -> config_dict.ConfigDict:
@@ -276,13 +274,33 @@ def main(argv):
   # Define a progress function for logging metrics
   def progress(num_steps, metrics):
     times.append(time.monotonic())
-    if _USE_WANDB.value and not _PLAY_ONLY.value:
-      wandb.log(metrics, step=num_steps)
+    
+    # Prepare enhanced metrics for logging
+    enhanced_metrics = dict(metrics)
+    
+    # !!
+    # Add detailed model distribution and reward analysis
+    if "model_distribution/total_envs" in metrics:
+      total_envs = int(metrics["model_distribution/total_envs"])
+      for i in range(5):  # Check up to 5 models
+        count_key = f"model_distribution/model_{i}_count"
+        percent_key = f"model_distribution/model_{i}_percentage"
+        # if count_key in metrics and percent_key in metrics:
+        #   enhanced_metrics[f"model_dist/model_{i}_count"] = metrics[count_key]
+        #   enhanced_metrics[f"model_dist/model_{i}_percent"] = metrics[percent_key]
+    
+    # Add reward component analysis
+    for key, value in metrics.items():
+      if key.startswith('reward/') and not key.endswith('_std'):
+        enhanced_metrics[f"reward_components/{key.replace('reward/', '')}"] = value
+    
+    if _USE_WANDB.value and not _PLAY_ONLY.value and wandb is not None:
+      wandb.log(enhanced_metrics, step=num_steps)
     if _USE_TB.value and not _PLAY_ONLY.value:
-      for key, value in metrics.items():
+      for key, value in enhanced_metrics.items():
         writer.add_scalar(key, value, num_steps)
       writer.flush()
-    if _RUN_EVALS.value:
+    if _RUN_EVALS.value and 'eval/episode_reward' in metrics:
       print(f"{num_steps}: reward={metrics['eval/episode_reward']:.3f}")
     if _LOG_TRAINING_METRICS.value:
       if "episode/sum_reward" in metrics:
@@ -290,12 +308,38 @@ def main(argv):
             f"{num_steps}: mean episode"
             f" reward={metrics['episode/sum_reward']:.3f}"
         )
+      # # !!
+      # # Print model distribution if available
+      # if "model_distribution/total_envs" in metrics:
+      #   total_envs = int(metrics["model_distribution/total_envs"])
+      #   print(f"{num_steps}: total envs={total_envs}")
+      #   for i in range(5):  # Check up to 5 models
+      #     count_key = f"model_distribution/model_{i}_count"
+      #     percent_key = f"model_distribution/model_{i}_percentage"
+      #     if count_key in metrics and percent_key in metrics:
+      #       count = int(metrics[count_key])
+      #       percent = metrics[percent_key]
+      #       print(f"  Model {i}: {count} envs ({percent:.1f}%)")
+      
   
-  # Load evaluation environment.
+  # Load evaluation environments for all models
   config_overrides = {"impl": _IMPL.value}
-  eval_env = (
-      None if _VISION.value else registry.load(_ENV_NAME.value, config=env_cfg, config_overrides=config_overrides)
-  )
+  if _VISION.value:
+    eval_envs = None
+  else:
+    # Import the constants to get the MuJoCo models
+    from mujoco_playground._src.locomotion_mixed.kawaru import kawaru_constants as consts
+    
+    # Create evaluation environments for all models used during training
+    num_models = len(env_cfg.models_config.xml_paths)
+    eval_envs = []
+    for model_idx in range(num_models):
+      # Pass the correct MuJoCo model for rendering
+      eval_env = registry.load(_ENV_NAME.value, config=env_cfg, config_overrides=config_overrides, 
+                             add_model_info=True, model_index=model_idx, 
+                             mj_model=consts.MJ_MODEL[model_idx])
+      eval_envs.append(eval_env)
+    print(f"Created {num_models} evaluation environments for models 0-{num_models-1}")
   # ! num_envs = 1
   # ! if _VISION.value:
   # !   num_envs = env_cfg.vision_config.render_batch_size
@@ -332,12 +376,22 @@ def main(argv):
       rscope_handle.set_make_policy(make_policy)
       rscope_handle.dump_rollout(params)
 
-  # Train the agent
+  # Train the agent (evaluation during training is feedforward only - doesn't modify policy)
+  if _EVAL_ALL_MODELS.value and eval_envs:
+    # Use all evaluation environments during training (slower but more comprehensive)
+    training_eval_env = eval_envs
+    print(f"Training will evaluate on all {len(eval_envs)} models during training")
+  else:
+    # Use only first evaluation environment during training (faster, recommended)
+    training_eval_env = eval_envs[0] if eval_envs else None
+    if eval_envs:
+      print(f"Training will evaluate only on model 0 during training (use --eval_all_models=true for all models)")
+  
   make_inference_fn, params, _ = train_fn(
       environment=env,
       progress_fn=progress,
       policy_params_fn=policy_params_fn,
-      eval_env=eval_env,
+      eval_env=training_eval_env,
   )
 
   print("Done training.")
@@ -348,11 +402,12 @@ def main(argv):
   # Start inference and evaluation
   print("Starting inference...")
 
-  inference_fn = make_inference_fn(params, deterministic=True)
+  # Create inference function.
+  inference_fn = make_inference_fn(params, deterministic=True)  
   jit_inference_fn = jax.jit(inference_fn)
-  
-  # Run evaluation rollouts.
-  def do_rollout(rng, state):
+
+  # Run evaluation rollouts for all models.
+  def do_rollout(rng, state, eval_env):
     empty_data = state.data.__class__(
         **{k: None for k in state.data.__annotations__}
     )  # pytype: disable=attribute-error
@@ -372,6 +427,9 @@ def main(argv):
           "data.mocap_pos": state.data.mocap_pos,
           "data.mocap_quat": state.data.mocap_quat,
           "data.xfrc_applied": state.data.xfrc_applied,
+          # !! to draw command 
+          "data": state.data, # <-- This saves all data fields, including xpos and xmat
+          "info": {"command": state.info["command"]}, 
       })
       if _VISION.value:
         traj_data = jax.tree_util.tree_map(lambda x: x[0], traj_data)
@@ -382,39 +440,110 @@ def main(argv):
     )
     return traj
 
-  rng = jax.random.split(jax.random.PRNGKey(_SEED.value), _NUM_VIDEOS.value)
-  reset_states = jax.jit(jax.vmap(eval_env.reset))(rng)
-  if _VISION.value:
-    reset_states = jax.tree_util.tree_map(lambda x: x[0], reset_states)
-  traj_stacked = jax.jit(jax.vmap(do_rollout))(rng, reset_states)
-  trajectories = [None] * _NUM_VIDEOS.value
-  for i in range(_NUM_VIDEOS.value):
-    t = jax.tree.map(lambda x, i=i: x[i], traj_stacked)
-    trajectories[i] = [
-        jax.tree.map(lambda x, j=j: x[j], t)
-        for j in range(_EPISODE_LENGTH.value)
-    ]
+  # Generate rollouts for each model using the same RNG for fair comparison
+  all_trajectories = []
+  if eval_envs:
+    # Use the same RNG seed for all models to ensure identical initial conditions
+    base_rng = jax.random.split(jax.random.PRNGKey(_SEED.value), _NUM_VIDEOS.value)
+    
+    for model_idx, eval_env in enumerate(eval_envs):
+      print(f"Generating rollouts for model {model_idx}...")
+      # Use the same RNG for all models to ensure fair comparison
+      rng = base_rng
+      reset_states = jax.jit(jax.vmap(eval_env.reset))(rng)
+      if _VISION.value:
+        reset_states = jax.tree_util.tree_map(lambda x: x[0], reset_states)
+      
+      # Create a partial function with the eval_env bound
+      def do_rollout_model(rng, state):
+        return do_rollout(rng, state, eval_env)
+      
+      traj_stacked = jax.jit(jax.vmap(do_rollout_model))(rng, reset_states)
+      
+      model_trajectories = [None] * _NUM_VIDEOS.value
+      for i in range(_NUM_VIDEOS.value):
+        t = jax.tree.map(lambda x, i=i: x[i], traj_stacked)
+        model_trajectories[i] = [
+            jax.tree.map(lambda x, j=j: x[j], t)
+            for j in range(_EPISODE_LENGTH.value)
+        ]
+      all_trajectories.append((model_idx, eval_env, model_trajectories))
+  else:
+    # Fallback for vision case - use the same base RNG
+    eval_env = training_eval_env
+    base_rng = jax.random.split(jax.random.PRNGKey(_SEED.value), _NUM_VIDEOS.value)
+    rng = base_rng
+    reset_states = jax.jit(jax.vmap(eval_env.reset))(rng)
+    if _VISION.value:
+      reset_states = jax.tree_util.tree_map(lambda x: x[0], reset_states)
+    
+    def do_rollout_model(rng, state):
+      return do_rollout(rng, state, eval_env)
+    
+    traj_stacked = jax.jit(jax.vmap(do_rollout_model))(rng, reset_states)
+    
+    trajectories = [None] * _NUM_VIDEOS.value
+    for i in range(_NUM_VIDEOS.value):
+      t = jax.tree.map(lambda x, i=i: x[i], traj_stacked)
+      trajectories[i] = [
+          jax.tree.map(lambda x, j=j: x[j], t)
+          for j in range(_EPISODE_LENGTH.value)
+      ]
+    all_trajectories.append((0, eval_env, trajectories))
 
-  # Render and save the rollout video
+  # Render and save rollouts for all models.
   render_every = 2
-  fps = 1.0 / eval_env.dt / render_every
-  print(f"FPS for rendering: {fps}")
-
   scene_option = mujoco.MjvOption()
   scene_option.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = False
   scene_option.flags[mujoco.mjtVisFlag.mjVIS_PERTFORCE] = False
   scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = False
-  for i, rollout in enumerate(trajectories):
-    traj = rollout[::render_every]
-    frames = eval_env.render(
-        traj,
-        camera="track",
-        scene_option=scene_option,
-        width=640,
-        height=480,
-    )
-    media.write_video(f"rollout{i}.mp4", frames, fps=fps)
-    print(f"Rollout video saved as 'rollout{i}.mp4'.")
+  
+  # Import the draw function for joystick commands
+  import numpy as np
+  from mujoco_playground._src.gait import draw_joystick_command
+  
+  for model_idx, eval_env, trajectories in all_trajectories:
+    fps = 1.0 / eval_env.dt / render_every
+    print(f"Rendering videos for model {model_idx} (FPS: {fps:.1f})...")
+    
+    for i, rollout in enumerate(trajectories):
+      traj = rollout[::render_every]
+      
+      # Create modify_scene_fns for this specific rollout
+      modify_scene_fns = []
+      for state in rollout:
+          # Il comando è stato salvato in info["command"] durante lax.scan
+          command = np.array(state.info["command"]) 
+          
+          # Estrazione degli altri dati
+          xyz = np.array(state.data.xpos[eval_env._torso_body_id])
+          xyz += np.array([0, 0, 0.2])
+          x_axis = np.array(state.data.xmat[eval_env._torso_body_id, 0])
+          yaw = -np.arctan2(x_axis[1], x_axis[0])
+          
+          modify_scene_fns.append(
+              functools.partial(
+                  draw_joystick_command,
+                  cmd=command, # Passa il comando dinamico salvato
+                  xyz=xyz,
+                  theta=yaw,
+                  scl=abs(command[0]) / env_cfg.command_config.a[0],
+              )
+          )
+      
+      mod_fns = modify_scene_fns[::render_every]
+      assert len(traj) == len(mod_fns)
+      frames = eval_env.render(
+          traj, 
+          height=480, 
+          width=640, 
+          modify_scene_fns=mod_fns,
+          scene_option=scene_option, 
+          camera="track",
+      )
+      video_filename = f"rollout_model{model_idx}_env{i}.mp4"
+      media.write_video(video_filename, frames, fps=fps)
+      print(f"Rollout video saved as '{video_filename}'.")
 
 
 if __name__ == "__main__":

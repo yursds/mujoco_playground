@@ -71,6 +71,8 @@ def default_config() -> config_dict.ConfigDict:
               torques=-0.0002,
               action_rate=-0.01,
               energy=-0.001,
+              # !! Penalties to encourage lighter robots.
+              mass_penalty=-0.,
               # Feet.
               feet_clearance=-2.0,
               feet_height=-0.2,
@@ -101,26 +103,17 @@ def default_config() -> config_dict.ConfigDict:
   )
 
 
-# def load_max_shapes(filepath):
-#     """
-#     Loads a dictionary of max shapes from a Python file.
-#     """
-#     namespace = {}
-#     with open(filepath, "r") as f:
-#         file_content = f.read()
-#         exec(file_content, namespace)
-    
-#     return namespace['max_shapes']
-
-
 class Joystick(kawaru_base.KawaruEnv):
   """Track a joystick command."""
-
+  
   def __init__(
+    # TODO: Implement mj_model switching based on action
       self,
       config: config_dict.ConfigDict = default_config(),
       config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
       mj_model: mujoco.MjModel = consts.MJ_MODEL[0],
+      add_model_info: bool = True,
+      model_index: int = 0,
   ):
     
     super().__init__(
@@ -129,8 +122,14 @@ class Joystick(kawaru_base.KawaruEnv):
         config_overrides=config_overrides,
     )
     
+    # Store model info parameters
+    self._add_model_info = add_model_info
+    self._model_index = model_index
+    
     # self.max_shapes = load_max_shapes(consts.ROOT_PATH / "max_shapes.py")
     self._post_init()
+    # TODO: more flexible handling of num_models
+    self.num_models = len(self._config.models_config.xml_paths)
 
   def _post_init(self) -> None:
     self._init_q = jp.array(self._mj_model.keyframe("home").qpos)
@@ -165,38 +164,6 @@ class Joystick(kawaru_base.KawaruEnv):
     self._cmd_a = jp.array(self._config.command_config.a)
     self._cmd_b = jp.array(self._config.command_config.b)
 
-
-  # def pad_data(self, obj_to_pad: dataclasses, target_shapes: dict):
-  #   """
-  #   Recursively pads arrays in a dataclass based on a dictionary of target shapes.
-  #   """
-  #   updates = {}
-  #   for field in dataclasses.fields(obj_to_pad):
-  #     attr_name = field.name
-  #     current_val = getattr(obj_to_pad, attr_name)
-      
-  #     # Check if the attribute name exists in the target shapes dictionary
-  #     if attr_name in target_shapes:
-  #       target_val = target_shapes[attr_name]
-        
-  #       if dataclasses.is_dataclass(current_val) and isinstance(target_val, dict):
-  #         # If it's a nested dataclass, recursively call pad_data
-  #         updates[attr_name] = self.pad_data(current_val, target_val)
-  #       elif isinstance(current_val, (jp.ndarray, np.ndarray)) and isinstance(target_val, (tuple, list)):
-  #         current_shape = current_val.shape
-  #         if current_shape != target_val:
-  #             padding_needed = [(0, t - s) for s, t in zip(current_shape, target_val)]
-  #             padded_val = jp.pad(current_val, padding_needed, mode='constant', constant_values=0)
-  #             updates[attr_name] = padded_val
-  #         else:
-  #           updates[attr_name] = current_val
-  #       else:
-  #         updates[attr_name] = target_val
-  #     # else:
-  #     #   updates[attr_name] = current_val
-    
-  #   return obj_to_pad.replace(**updates)
-
   def reset(self, rng: jax.Array) -> mjx_env.State:
     
     qpos = self._init_q
@@ -218,19 +185,29 @@ class Joystick(kawaru_base.KawaruEnv):
         jax.random.uniform(key, (6,), minval=-0.5, maxval=0.5)
     )
 
+    # Ensure the control vector matches the model's actuator size (nu).
+    # Some mixed models may have differing numbers of actuators, so slice
+    # or pad qpos[7:] to match `nu` to avoid broadcasting errors in
+    # mjx.forward's actuation step.
+    base_ctrl = qpos[7:]
+    nu = int(self.mj_model.nu)
+    if base_ctrl.shape[0] >= nu:
+      ctrl = base_ctrl[:nu]
+    else:
+      pad_len = nu - base_ctrl.shape[0]
+      ctrl = jp.pad(base_ctrl, (0, pad_len))
+
     data = mjx_env.make_data(
         self.mj_model,
         qpos=qpos,
         qvel=qvel,
-        ctrl=qpos[7:],
+        ctrl=ctrl,
         impl=self.mjx_model.impl.value,
         nconmax=self._config.nconmax,
         njmax=self._config.njmax,
     )
     data = mjx.forward(self.mjx_model, data)
-
-    # data = mjx_env.init(self.mjx_model, qpos=qpos, qvel=qvel, ctrl=qpos[7:19])
-
+    
     rng, key1, key2, key3 = jax.random.split(rng, 4)
     time_until_next_pert = jax.random.uniform(
         key1,
@@ -285,11 +262,9 @@ class Joystick(kawaru_base.KawaruEnv):
     for k in self._config.reward_config.scales.keys():
       metrics[f"reward/{k}"] = jp.zeros(())
     metrics["swing_peak"] = jp.zeros(())
-
+    
     obs = self._get_obs(data, info)
     reward, done = jp.zeros(2)
-    
-    # data = self.pad_data(data, self.max_shapes )
     
     return mjx_env.State(data, obs, reward, done, metrics, info)
 
@@ -307,20 +282,16 @@ class Joystick(kawaru_base.KawaruEnv):
       state = self._maybe_apply_perturbation(state)
     # state = self._reset_if_outside_bounds(state)
     
-    # Retrieve the index to mask from the state info (injected by the wrapper)
-    mask_idx = state.info.get('mask_actuator_index', jp.array(-1, dtype=jp.int32))
+    # Filter the incoming action to the first `nu` actuator dimensions.
+    # Some wrappers append extra values (selection tail) to actions; ensure
+    # we only use the controller-relevant slice here.
+    nu = int(self.mjx_model.nu)
+    ctrl_action = action[..., :nu]
+    tail_action = action[..., nu:]
     
-    # Check if masking is needed (i.e., mask_idx is not the dummy value -1)
-    masking_needed = mask_idx >= 0
-    
-    action_with_mask = action.at[mask_idx].set(0.0)
-    action = jp.where(
-      masking_needed,     # Condition: If masking is needed (mask_idx >= 0)
-      action_with_mask,   # Result TRUE: Use the targets where the masked actuator is set to 0.0 action
-      action              # Result FALSE: Use the original targets
-    )
-    
-    motor_targets = self._default_pose + action * self._config.action_scale
+    # Ensure the default pose is sliced to the actuator count so shapes
+    # match when models have different numbers of actuators (nu).
+    motor_targets = self._default_pose[:nu] + ctrl_action * self._config.action_scale
     data = mjx_env.step(
         self.mjx_model, state.data, motor_targets, self.n_substeps
     )
@@ -340,7 +311,7 @@ class Joystick(kawaru_base.KawaruEnv):
     done = self._get_termination(data)
 
     rewards = self._get_reward(
-        data, action, state.info, state.metrics, done, first_contact, contact
+        data, ctrl_action, state.info, state.metrics, done, first_contact, contact
     )
     rewards = {
         k: v * self._config.reward_config.scales[k] for k, v in rewards.items()
@@ -348,7 +319,7 @@ class Joystick(kawaru_base.KawaruEnv):
     reward = jp.clip(sum(rewards.values()) * self.dt, 0.0, 10000.0)
     
     state.info["last_last_act"] = state.info["last_act"]
-    state.info["last_act"] = action
+    state.info["last_act"] = ctrl_action
     state.info["steps_until_next_cmd"] -= 1
     state.info["rng"], key1, key2 = jax.random.split(state.info["rng"], 3)
     state.info["command"] = jp.where(
@@ -367,11 +338,8 @@ class Joystick(kawaru_base.KawaruEnv):
     for k, v in rewards.items():
       state.metrics[f"reward/{k}"] = v
     state.metrics["swing_peak"] = jp.mean(state.info["swing_peak"])
-
+    
     done = done.astype(reward.dtype)
-
-    # state.info["data"]= data
-    # state = state.replace(obs=obs, reward=reward, done=done)
     state = state.replace(data=data, obs=obs, reward=reward, done=done)
 
     return state
@@ -459,10 +427,29 @@ class Joystick(kawaru_base.KawaruEnv):
         info["steps_since_last_pert"] >= info["steps_until_next_pert"],  # 1
     ])
 
-    return {
+    obs_dict = {
         "state": state,
         "privileged_state": privileged_state,
     }
+    
+    # Add model information if requested
+    if self._add_model_info:
+      obs_dict = self._add_model_info_to_obs(obs_dict)
+    
+    return obs_dict
+
+  def _add_model_info_to_obs(self, obs_dict: Dict[str, jax.Array]) -> Dict[str, jax.Array]:
+    """Add model information to observations for consistency with mixed training."""
+    # Create one-hot encoding for the model index
+    model_one_hot = jp.zeros(self.num_models)
+    model_one_hot = model_one_hot.at[self._model_index].set(1.0)
+    
+    # Add model info to each observation key
+    modified_obs = {}
+    for key, obs in obs_dict.items():
+      modified_obs[key] = jp.concatenate([obs, model_one_hot])
+    
+    return modified_obs
 
   def _get_reward(
       self,
@@ -493,6 +480,7 @@ class Joystick(kawaru_base.KawaruEnv):
             action, info["last_act"], info["last_last_act"]
         ),
         "energy": self._cost_energy(data.qvel[6:18], data.actuator_force[:12]),
+        "mass_penalty": self._cost_mass_penalty(),
         "feet_slip": self._cost_feet_slip(data, contact, info),
         "feet_clearance": self._cost_feet_clearance(data),
         "feet_height": self._cost_feet_height(
@@ -555,6 +543,11 @@ class Joystick(kawaru_base.KawaruEnv):
   ) -> jax.Array:
     del last_last_act  # Unused.
     return jp.sum(jp.square(act - last_act))
+
+  def _cost_mass_penalty(self) -> jax.Array:
+    # Penalize total robot mass to encourage lighter configurations.
+    # Sum all body masses in the model.
+    return jp.sum(self.mjx_model.body_mass)
 
   # Other rewards.
 

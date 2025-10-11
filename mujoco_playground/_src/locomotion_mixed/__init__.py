@@ -76,6 +76,7 @@ def load(
     env_name: str,
     config: Optional[config_dict.ConfigDict] = None,
     config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
+    **kwargs
 ) -> mjx_env.MjxEnv:
   """Get an environment instance with the given configuration.
 
@@ -84,6 +85,7 @@ def load(
       config: The configuration to use. If not provided, the default
         configuration is used.
       config_overrides: A dictionary of overrides for the configuration.
+      **kwargs: Additional arguments to pass to the environment constructor.
 
   Returns:
       An instance of the environment.
@@ -93,7 +95,7 @@ def load(
         f"Env '{env_name}' not found. Available envs: {_cfgs.keys()}"
     )
   config = config or get_default_config(env_name)
-  return _envs[env_name](config=config, config_overrides=config_overrides)
+  return _envs[env_name](config=config, config_overrides=config_overrides, **kwargs)
 
 
 def get_domain_randomizer(

@@ -53,15 +53,16 @@ def load(
     env_name: str,
     config: Optional[ml_collections.ConfigDict] = None,
     config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
+    **kwargs
 ) -> mjx_env.MjxEnv:
   if env_name in manipulation.ALL_ENVS:
-    return manipulation.load(env_name, config, config_overrides)
+    return manipulation.load(env_name, config, config_overrides, **kwargs)
   elif env_name in locomotion.ALL_ENVS:
-    return locomotion.load(env_name, config, config_overrides)
+    return locomotion.load(env_name, config, config_overrides, **kwargs)
   elif env_name in locomotion_mixed.ALL_ENVS:
-    return locomotion_mixed.load(env_name, config, config_overrides)
+    return locomotion_mixed.load(env_name, config, config_overrides, **kwargs)
   elif env_name in dm_control_suite.ALL_ENVS:
-    return dm_control_suite.load(env_name, config, config_overrides)
+    return dm_control_suite.load(env_name, config, config_overrides, **kwargs)
 
   raise ValueError(f"Env '{env_name}' not found. Available envs: {ALL_ENVS}")
 
