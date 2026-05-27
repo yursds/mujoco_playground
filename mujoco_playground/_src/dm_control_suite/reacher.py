@@ -49,7 +49,7 @@ def _make_model(
     xml_path: epath.Path, target_size: float, assets: Dict[str, Any]
 ) -> mujoco.MjModel:
   spec = mujoco.MjSpec.from_string(xml_path.read_text(), assets)
-  if mujoco.__version__ >= "3.3.0":
+  if mujoco.mj_version() >= 330:
     target_body = spec.body("target")
   else:
     target_body = spec.find_body("target")
